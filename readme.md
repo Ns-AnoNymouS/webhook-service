@@ -4,12 +4,38 @@ This FastAPI project enables users to create, read, update, and delete webhook s
 
 ---
 
+## 📦 Environment Variables
+
+The following environment variables can be configured to customize the service:
+
+| Variable         | Default Value              | Description                                    |
+|------------------|----------------------------|------------------------------------------------|
+| `DB_NAME`        | `webhook_service`          | Name of the MongoDB database                   |
+| `MONGO_URI`      | `mongodb://localhost:27017`| MongoDB connection URI                         |
+| `REDIS_URL`      | `redis://localhost`        | Redis connection URL                           |
+| `WORKER_COUNT`   | `10`                       | Number of concurrent webhook workers           |
+| `REQUEST_TIMEOUT`| `10`                       | HTTP request timeout for webhook delivery (s)  |
+
+Set these in your `.env` file or export them in your shell environment before running the service.
+
+---
+
+## ⚙️ Architecture
+
+This version of the webhook service uses **`asyncio.Queue`** to handle webhook delivery jobs efficiently. Incoming events are enqueued and processed concurrently by a pool of asynchronous workers.
+
+> 🧠 **Note:** There is an earlier implementation of this project that uses **FastAPI’s built-in `BackgroundTasks`** for webhook dispatching instead of `asyncio.Queue`. You can find this version in a separate branch named `background-task-version`.
+
+---
+
 ## 📚 Features
 
 * ✅ Create, Read, Update, Delete subscriptions
 * 📩 Trigger webhooks based on event types
 * 🌐 Subscriptions to all events by passing an empty `event_types` list
+* 🔒 Subscription secrets: Add a secret key to your subscription to verify incoming requests before sending the webhook POST request to the target URL.
 * ⚡ Asynchronous and high-performance (FastAPI + HTTPX)
+* 🔁 Queue-based webhook processing via `asyncio.Queue`
 * 🧪 Comprehensive test suite using `pytest`, `httpx`, and `respx`
 * 🐳 Fully Dockerized setup
 
@@ -22,28 +48,15 @@ This FastAPI project enables users to create, read, update, and delete webhook s
 ```bash
 git clone https://github.com/Ns-AnoNymouS/webhook-service.git
 cd webhook-service
-```
+````
 
-### 2. Add Your Requirements
-
-Ensure your `requirements.txt` contains:
-
-```txt
-fastapi
-uvicorn
-httpx
-respx
-pytest
-pytest-asyncio
-```
-
-### 3. Build and Start the Server
+### 2. Build and Start the Server
 
 ```bash
 docker-compose up --build
 ```
 
-### 4. Access the API Docs
+### 3. Access the API Docs
 
 Visit: [http://localhost:8000/docs](http://localhost:8000/docs)
 
@@ -107,19 +120,20 @@ Deletes a subscription by ID.
 
 ### 🚀 Trigger Webhook
 
-**POST** `/ingest/{subscription_id}`
+**POST** `/ingest/{subscription_id}?event_type=order.update`
 
 ```json
 {
-  "event_type": ["order.update"],
-  "payload": {
-    "order_id": "1234",
-    "status": "shipped"
-  }
+  "order_id": "1234",
+  "status": "shipped"
 }
 ```
 
+In this updated version, the event_type is now a query parameter in the URL (e.g., ?event_type=order.update), while the payload is provided directly in the body of the request.
+
 If the `event_type` matches what the subscription expects, a webhook POST request is sent to the `target_url`.
+
+> 🛡️ Verification: If a secret was provided in the subscription, the system will check for the presence of the X-Hub-Signature-256 header in the request. If it’s missing or doesn’t match, the webhook request is rejected. Check the `signature.py` to get the `X-Hub-Signature-256` header for your body.
 
 ---
 
@@ -146,6 +160,4 @@ This ensures correct imports when tests rely on `src/` as the module root.
 
 ---
 
-## 📫 Contact
 
-Feel free to open issues or contribute to the repo!

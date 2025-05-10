@@ -1,13 +1,14 @@
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 
 
 class Attempt(BaseModel):
     timestamp: datetime
-    status_code: int
+    status_code: Optional[int]
     success: bool
     attempt: int
+    error: Optional[str] = None
 
 
 class DeliveryLog(BaseModel):
@@ -21,3 +22,12 @@ class DeliveryLog(BaseModel):
     payload: Any  # Payload can be any structure
     subscription_id: str
     target_url: str
+
+
+class RecentDeliveryResponse(BaseModel):
+    delivery_id: str
+    event_types: List[str]
+    payload: Dict[str, Any]
+    attempts: List[Attempt]
+    status: str
+    timestamp: str
