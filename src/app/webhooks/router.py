@@ -1,10 +1,13 @@
+import hmac
+import hashlib
+import json
 import logging
+from typing import List, Dict, Any
 
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import Request, BackgroundTasks, Query, Body, APIRouter, Header
 from fastapi.responses import JSONResponse
 
 from ..subscriptions.models import get_subscription
-from ..webhooks.schemas import EventTypeRequest
 from ..workers.tasks import send_webhook_task
 
 logger = logging.getLogger(__name__)
@@ -13,26 +16,46 @@ router = APIRouter()
 @router.post("/{sub_id}")
 async def ingest_webhook(
     sub_id: str,
-    event_request: EventTypeRequest,  # Directly use EventTypeRequest as a parameter
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    request: Request,
+    body: Dict[str, Any] = Body(..., media_type="application/json"),
+    event_types: List[str] = Query(default=[]),
+    x_hub_signature_256: str = Header(default=None, convert_underscores=False),
 ):
-    print(f"Received request to ingest webhook for subscription ID: {sub_id}")
-    # Fetch subscription details using the sub_id
+    logger.info(f"Received request to ingest webhook for subscription ID: {sub_id}")
+
     sub = await get_subscription(sub_id)
     if not sub:
         return JSONResponse(status_code=404, content={"detail": "Subscription not found"})
 
-    # If event_type is provided, validate that at least one of the event types exists in the subscription
-    event_types = event_request.event_type
-    if event_types and sub.get("event_types", []) and not any(event_type in sub.get("event_types", []) for event_type in event_types):
-        return JSONResponse(status_code=403, content={"detail": "Event not subscribed"})
+    if sub.get("secret"):
+        if not x_hub_signature_256:
+            return JSONResponse(status_code=403, content={"detail": "Missing signature"})
+        
+        body_bytes = json.dumps(body, separators=(",", ":")).encode()
+        # Generate the expected signature
+        expected_signature = hmac.new(
+            sub["secret"].encode(), body_bytes, hashlib.sha256
+        ).hexdigest()
 
-    # Extract the payload if provided
-    payload = event_request.payload if event_request.payload else {}
+        full_expected = f"sha256={expected_signature}"
+        if x_hub_signature_256 != full_expected:
+            logger.warning(f"Signature mismatch: expected {full_expected}, got {x_hub_signature_256}")
+            return JSONResponse(status_code=403, content={"detail": "Invalid signature"})
 
-    # Add the background task to send the webhook asynchronously
-    background_tasks.add_task(send_webhook_task, sub_id=sub_id, payload=payload, event=event_types or [])
+    # Validate event types if subscription limits them
+    if event_types:
+        allowed_types = sub.get("event_types", [])
+        if allowed_types and not any(et in allowed_types for et in event_types):
+            return JSONResponse(status_code=403, content={"detail": "Event not subscribed"})
 
-    # Log that the task was accepted and return the 202 Accepted response
+    # Add webhook task to background queue
+    background_tasks.add_task(
+        send_webhook_task,
+        sub_id=sub_id,
+        payload=body,
+        event=event_types or [],
+    )
+
     logger.info(f"Webhook task queued for subscription {sub_id} with event types: {event_types}")
     return JSONResponse(status_code=202, content={"detail": "Accepted"})
