@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  fastapi:
+    build: .
+    container_name: fastapi_server
+    ports:
+      - "8000:8000"  # Map port 8000 of the container to port 8000 on the host machine
+    volumes:
+      - .:/app  # Mount the current directory to /app inside the container
+    environment:
+      - PYTHONUNBUFFERED=1  # Ensures the logs are not buffered
+    networks:
+      - fastapi_network
+
+networks:
+  fastapi_network:
+    driver: bridge
