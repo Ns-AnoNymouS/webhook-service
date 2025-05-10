@@ -8,7 +8,6 @@ from fastapi import Request, BackgroundTasks, Query, Body, APIRouter, Header
 from fastapi.responses import JSONResponse
 
 from ..subscriptions.models import get_subscription
-from ..workers.tasks import send_webhook_task
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -50,11 +49,12 @@ async def ingest_webhook(
             return JSONResponse(status_code=403, content={"detail": "Event not subscribed"})
 
     # Add webhook task to background queue
-    background_tasks.add_task(
-        send_webhook_task,
-        sub_id=sub_id,
-        payload=body,
-        event=event_types or [],
+    request.app.state.queue.put_nowait(
+        {
+            "sub_id": sub_id,
+            "payload": body,
+            "event_types": event_types or [],
+        }
     )
 
     logger.info(f"Webhook task queued for subscription {sub_id} with event types: {event_types}")

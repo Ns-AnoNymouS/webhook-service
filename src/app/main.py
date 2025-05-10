@@ -1,10 +1,13 @@
+import logging
+import asyncio
+
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 
 from .delivery_logs.router import router as logs_router
 from .subscriptions.router import router as subscriptions_router
 from .webhooks.router import router as webhooks_router
-
-import logging
+from .workers.service import start_workers, stop_workers
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -16,11 +19,24 @@ handler.setFormatter(formatter)
 
 logger.addHandler(handler)
 
-app = FastAPI()
 
-app.include_router(subscriptions_router, prefix="/subscriptions", tags=["Subscriptions"])
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.queue = asyncio.Queue()
+    start_workers(app.state.queue)
+    yield
+    logger.info("Shutting down...")
+    stop_workers(app.state.queue)
+
+
+app = FastAPI(lifespan=lifespan)
+
+app.include_router(
+    subscriptions_router, prefix="/subscriptions", tags=["Subscriptions"]
+)
 app.include_router(webhooks_router, prefix="/ingest", tags=["Webhook Ingestion"])
 app.include_router(logs_router, prefix="/status", tags=["Delivery Logs"])
+
 
 @app.get("/")
 def read_root():
