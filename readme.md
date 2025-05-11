@@ -16,40 +16,53 @@ This FastAPI project enables users to create, read, update, and delete webhook s
 
 ## 📆 Features
 
-* ✅ Create, Read, Update, Delete webhook subscriptions
-* 📩 Trigger webhooks for specific event types
-* 🌐 Subscribe to all events with empty `event_types`
-* 🔒 Secure subscriptions using secret-based signature verification
-* ⚡ Asynchronous processing via `asyncio.Queue`
-* 🛡️ Configurable retry strategy for webhook delivery
-* 🧰 Dockerized setup for easy deployment
-* 🔮 NoSQL-first approach with MongoDB
-* 🤖 Redis used for coordination (future extensibility)
+- ✅ Create, Read, Update, Delete webhook subscriptions
+- 📩 Trigger webhooks for specific event types
+- 🌐 Subscribe to all events with empty `event_types`
+- 🔒 Secure subscriptions using secret-based signature verification
+- ⚡ Asynchronous processing via `asyncio.Queue`
+- 🛡️ Configurable retry strategy for webhook delivery
+- 🧰 Dockerized setup for easy deployment
+- 🔮 NoSQL-first approach with MongoDB
+- 🤖 Redis used for coordination (future extensibility)
 
 ---
 
 ## 🌟 Architecture Overview
 
-* **FastAPI** for serving HTTP API endpoints
-* **MongoDB** (NoSQL) to store:
+- **FastAPI** for serving HTTP API endpoints
+- **MongoDB** (NoSQL) to store:
 
-  * Subscription documents
-  * Webhook delivery logs
-* **Redis** for shared state and coordination
-* **AsyncIO Queue** to handle high-throughput delivery
-* **HTTPX** for async HTTP requests
-* **Retry logic** using static intervals
+  - Subscription documents
+  - Webhook delivery logs
+
+- **Redis** for shared state and coordination
+- **AsyncIO Queue** to handle high-throughput delivery
+- **HTTPX** for async HTTP requests
+- **Retry logic** using static intervals
 
 ---
 
 ## 🔧 Why NoSQL (MongoDB)?
 
-* Subscription documents can vary and grow in schema over time.
-* Delivery logs may be numerous and not require strong relational consistency.
-* Indexes can be applied on `subscription_id`, `event_type`, and `status` for efficient retrieval.
-* MongoDB provides great performance for high write throughput, which suits webhook logging.
+- Subscription documents can vary and grow in schema over time.
+- Delivery logs may be numerous and not require strong relational consistency.
+- Indexes can be applied on `subscription_id`, `event_type`, and `status` for efficient retrieval.
+- MongoDB provides great performance for high write throughput, which suits webhook logging.
 
 ---
+
+## 🚀 Queuing Feature & Background Task Implementation
+
+The project leverages an AsyncIO Queue to efficiently manage high-throughput webhook deliveries, ensuring both scalability and reliability. In the main branch, an initial implementation of FastAPI background tasks was introduced to handle webhook deliveries asynchronously. While this foundational version successfully demonstrates the core background processing functionality, it is not a complete implementation and does not include all the advanced features found in the current branch.
+
+The background task system in the main branch operates flawlessly, processing delivery attempts seamlessly. The latest branch builds upon this foundation and adds key features such as:
+
+- Signature Verification: Ensuring the authenticity and security of outgoing webhook events.
+
+Furthermore, the number of workers processing the queue can be customized via the .env file, where you can specify the WORKER_COUNT environment variable. This allows you to adjust the number of asynchronous workers based on the desired load and scalability.
+
+This progression reflects a focused effort to create a scalable, reliable, and secure webhook subscription service with enhanced features to meet more complex use cases.
 
 ## 📢 Backoff and Retry Strategy
 
@@ -59,16 +72,16 @@ The current backoff strategy uses a **static retry interval list** defined in [`
 RETRY_INTERVALS = [10, 30, 60, 120, 300]  # in seconds
 ```
 
-* Retries are limited to **5 attempts**.
-* Static backoff is simple and predictable.
-* This avoids wasting resources on excessive retries.
-* For more flexibility, an **exponential backoff** mechanism can be implemented if needed with a formula like base * (2 ** attempt).
+- Retries are limited to **5 attempts**.
+- Static backoff is simple and predictable.
+- This avoids wasting resources on excessive retries.
+- For more flexibility, an **exponential backoff** mechanism can be implemented if needed with a formula like base \* (2 \*\* attempt).
 
 ### ✅ Signature Verification
 
 If a `secret` is added to a subscription, both **outgoing webhooks** and **incoming ingest events** are verified using HMAC-SHA256:
 
-* **Webhook delivery**: When the system sends an event to the `target_url`, it includes a header:
+- **Webhook delivery**: When the system sends an event to the `target_url`, it includes a header:
 
   ```
   X-Hub-Signature-256: sha256=<HMAC_HEX>
@@ -76,7 +89,7 @@ If a `secret` is added to a subscription, both **outgoing webhooks** and **incom
 
   This is the HMAC-SHA256 of the JSON body, signed using the subscription’s `secret`. Receivers can use this to verify authenticity.
 
-* **Webhook ingestion (`/ingest/{subscription_id}`)**: When an external service calls the `/ingest` endpoint to simulate an event, the system **verifies** the request by checking the signature using the stored secret. If the signature is invalid, the event is **rejected**.
+- **Webhook ingestion (`/ingest/{subscription_id}`)**: When an external service calls the `/ingest` endpoint to simulate an event, the system **verifies** the request by checking the signature using the stored secret. If the signature is invalid, the event is **rejected**.
 
   To successfully call `/ingest`, the request must include:
 
@@ -89,11 +102,13 @@ If a `secret` is added to a subscription, both **outgoing webhooks** and **incom
 This ensures that **only trusted sources** can trigger webhook events for a given subscription.
 
 ## 🎯 Event Type Filtering
+
 Subscriptions can specify event_types like:
 
 ```json
 ["user.signup", "order.placed"]
 ```
+
 Only matching events trigger webhook delivery.
 If event_types is empty, the subscription will receive all events.
 
@@ -117,6 +132,7 @@ If event_types is empty, the subscription will receive all events.
 git clone https://github.com/Ns-AnoNymouS/webhook-service.git
 cd webhook-service
 ```
+
 ### 2. Create the .env File
 
 Before building the Docker container, create a `.env` file in the root of the project directory and add your `MongoDB Atlas URI` and `Redis Cloud URL`, along with other environment variables, as described in the Environment Variables section above.
@@ -134,10 +150,12 @@ sudo docker-compose up --build
 ```
 
 Use the below command to stop the instance if you are getting any error related to KeyError
+
 ```bash
 docker-compose down
 
 ```
+
 ### 4. Access API Docs
 
 Visit: [http://localhost:8000/docs](http://localhost:8000/docs)
@@ -206,9 +224,9 @@ To inspect webhook deliveries, use [https://webhook.site/](https://webhook.site/
 
 Assumptions:
 
-* 5000 events/day, \~1.2 retries/event
-* 1 container handles all workloads
-* Minimal logging requirements
+- 5000 events/day, \~1.2 retries/event
+- 1 container handles all workloads
+- Minimal logging requirements
 
 ---
 
@@ -228,8 +246,8 @@ Assumptions:
 
 **Indexes:**
 
-* `event_types`
-* `created_at`
+- `event_types`
+- `created_at`
 
 ### `delivery_logs`
 
@@ -246,9 +264,9 @@ Assumptions:
 
 **Indexes:**
 
-* `subscription_id`
-* `status`
-* `last_attempt_at`
+- `subscription_id`
+- `status`
+- `last_attempt_at`
 
 ---
 
@@ -264,11 +282,11 @@ PYTHONPATH=./src pytest tests/
 
 ## 🙏 Credits
 
-* [FastAPI](https://fastapi.tiangolo.com/)
-* [MongoDB](https://www.mongodb.com/)
-* [Redis](https://redis.io/)
-* [HTTPX](https://www.python-httpx.org/)
-* [Respx](https://lundberg.github.io/respx/)
-* [Webhook.site](https://webhook.site/) for live webhook testing
-* [OpenAI ChatGPT](https://chat.openai.com)
-* [webhook.site](https://webhook.site) for testing
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [MongoDB](https://www.mongodb.com/)
+- [Redis](https://redis.io/)
+- [HTTPX](https://www.python-httpx.org/)
+- [Respx](https://lundberg.github.io/respx/)
+- [Webhook.site](https://webhook.site/) for live webhook testing
+- [OpenAI ChatGPT](https://chat.openai.com)
+- [webhook.site](https://webhook.site) for testing
