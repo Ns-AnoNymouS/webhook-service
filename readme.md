@@ -117,8 +117,11 @@ If event_types is empty, the subscription will receive all events.
 git clone https://github.com/Ns-AnoNymouS/webhook-service.git
 cd webhook-service
 ```
+### 2. Create the .env File
 
-### 2. Start with Docker
+Before building the Docker container, create a `.env` file in the root of the project directory and add your `MongoDB Atlas URI` and `Redis Cloud URL`, along with other environment variables, as described in the Environment Variables section above.
+
+### 3. Start with Docker
 
 ```bash
 docker-compose up --build
@@ -130,7 +133,12 @@ If you're on Linux and face permission issues, use:
 sudo docker-compose up --build
 ```
 
-### 3. Access API Docs
+Use the below command to stop the instance if you are getting any error related to KeyError
+```bash
+docker-compose down
+
+```
+### 4. Access API Docs
 
 Visit: [http://localhost:8000/docs](http://localhost:8000/docs)
 
