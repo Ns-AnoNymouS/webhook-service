@@ -54,14 +54,29 @@ RETRY_INTERVALS = [10, 30, 60, 120, 300]  # in seconds
 * This avoids wasting resources on excessive retries.
 * For more flexibility, an **exponential backoff** mechanism can be implemented if needed with a formula like base * (2 ** attempt).
 
----
-
-## 🔒 Security Features
 ### ✅ Signature Verification
-If a secret is added to a subscription, outgoing webhooks will include a header:
-X-Hub-Signature-256: sha256=...
 
-Receivers can verify this to ensure authenticity. Incoming secrets are hashed using HMAC-SHA256 over the request body.
+If a `secret` is added to a subscription, both **outgoing webhooks** and **incoming ingest events** are verified using HMAC-SHA256:
+
+* **Webhook delivery**: When the system sends an event to the `target_url`, it includes a header:
+
+  ```
+  X-Hub-Signature-256: sha256=<HMAC_HEX>
+  ```
+
+  This is the HMAC-SHA256 of the JSON body, signed using the subscription’s `secret`. Receivers can use this to verify authenticity.
+
+* **Webhook ingestion (`/ingest/{subscription_id}`)**: When an external service calls the `/ingest` endpoint to simulate an event, the system **verifies** the request by checking the signature using the stored secret. If the signature is invalid, the event is **rejected**.
+
+  To successfully call `/ingest`, the request must include:
+
+  ```
+  X-Hub-Signature-256: sha256=<HMAC_HEX>
+  ```
+
+  where `<HMAC_HEX>` is the HMAC-SHA256 digest of the request body using the same `secret` configured for the subscription.
+
+This ensures that **only trusted sources** can trigger webhook events for a given subscription.
 
 ## 🎯 Event Type Filtering
 Subscriptions can specify event_types like:
