@@ -3,6 +3,12 @@
 This FastAPI project enables users to create, read, update, and delete webhook subscriptions. When events are triggered, the system sends POST requests (webhooks) to subscribed external URLs. It supports event type filtering, signature verification, and robust retry strategies to ensure delivery reliability.
 
 ---
+## 🌐 Live Demo
+- Base URL: https://fuzzy-consuelo-sri-city-229c8560.koyeb.app  
+  Access the running API service.
+
+- API Documentation (Swagger UI): https://fuzzy-consuelo-sri-city-229c8560.koyeb.app/docs  
+  Explore and interact with the API endpoints using the automatically generated docs.
 
 ## 📆 Features
 
