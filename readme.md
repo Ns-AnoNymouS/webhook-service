@@ -137,6 +137,8 @@ cd webhook-service
 
 Before building the Docker container, create a `.env` file in the root of the project directory and add your `MongoDB Atlas URI` and `Redis Cloud URL`, along with other environment variables, as described in the Environment Variables section above.
 
+> ⚠️ **Note:** Default values of MONGO_URI and REDIS_URL wont be working in docker so make sure to use public `MongoDB Atlas URI` and `Redis Cloud URL`.
+
 ### 3. Start with Docker
 
 ```bash
