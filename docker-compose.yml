@@ -1,18 +1,42 @@
 version: '3.8'
 
 services:
-  fastapi:
-    build: .
-    container_name: fastapi_server
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
-      - "8000:8000"  # Map port 8000 of the container to port 8000 on the host machine
-    volumes:
-      - .:/app  # Mount the current directory to /app inside the container
+      - "${APP_PORT:-8000}:8000"
     environment:
-      - PYTHONUNBUFFERED=1  # Ensures the logs are not buffered
+      - MONGO_URI=mongodb://mongo:${MONGO_PORT:-27017}
+      - REDIS_URL=redis://redis:${REDIS_PORT:-6379}
+    depends_on:
+      - mongo
+      - redis
     networks:
-      - fastapi_network
+      - app-network
+    volumes:
+      - .:/app
+
+  mongo:
+    image: mongo:latest
+    ports:
+      - "${MONGO_PORT:-27018}:${MONGO_PORT:-27017}"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - app-network
+
+  redis:
+    image: redis:latest
+    ports:
+      - "${REDIS_PORT:-6378}:${REDIS_PORT:-6379}"
+    networks:
+      - app-network
 
 networks:
-  fastapi_network:
+  app-network:
     driver: bridge
+
+volumes:
+  mongo-data:

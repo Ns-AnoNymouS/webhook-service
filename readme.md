@@ -8,13 +8,13 @@ This FastAPI project enables users to create, read, update, and delete webhook s
 
 The following environment variables can be configured to customize the service:
 
-| Variable         | Default Value              | Description                                    |
-|------------------|----------------------------|------------------------------------------------|
-| `DB_NAME`        | `webhook_service`          | Name of the MongoDB database                   |
-| `MONGO_URI`      | `mongodb://localhost:27017`| MongoDB connection URI                         |
-| `REDIS_URL`      | `redis://localhost`        | Redis connection URL                           |
-| `WORKER_COUNT`   | `10`                       | Number of concurrent webhook workers           |
-| `REQUEST_TIMEOUT`| `10`                       | HTTP request timeout for webhook delivery (s)  |
+| Variable          | Default Value               | Description                                   |
+| ----------------- | --------------------------- | --------------------------------------------- |
+| `DB_NAME`         | `webhook_service`           | Name of the MongoDB database                  |
+| `MONGO_URI`       | `mongodb://localhost:27017` | MongoDB connection URI                        |
+| `REDIS_URL`       | `redis://localhost`         | Redis connection URL                          |
+| `WORKER_COUNT`    | `10`                        | Number of concurrent webhook workers          |
+| `REQUEST_TIMEOUT` | `10`                        | HTTP request timeout for webhook delivery (s) |
 
 Set these in your `.env` file or export them in your shell environment before running the service.
 
@@ -22,22 +22,43 @@ Set these in your `.env` file or export them in your shell environment before ru
 
 ## ⚙️ Architecture
 
-This version of the webhook service uses **`asyncio.Queue`** to handle webhook delivery jobs efficiently. Incoming events are enqueued and processed concurrently by a pool of asynchronous workers.
+This version of the webhook service uses **FastAPI** with **asyncio.Queue** for webhook delivery. Events are queued and processed concurrently by asynchronous workers using **HTTPX**. Redis is optionally used for deduplication and retry management.
 
-> 🧠 **Note:** There is an earlier implementation of this project that uses **FastAPI’s built-in `BackgroundTasks`** for webhook dispatching instead of `asyncio.Queue`. You can find this version in a separate branch named `background-task-version`.
+### ✅ Framework: FastAPI
+
+* High performance, modern async support.
+* Native Swagger documentation.
+
+### ✅ Database: MongoDB (NoSQL)
+
+* Chosen for flexibility in storing dynamic webhook subscription schemas.
+* No fixed schema required — ideal for various payloads and evolving event types.
+* Suitable for large-scale data like delivery logs with flexible indexing.
+* Built-in support for TTL indexes, ideal for log expiration.
+
+### ✅ Async Task System: asyncio.Queue
+
+* Efficient in-process background task management.
+* Easy to scale with configurable worker count.
+* Webhooks are retried on failure using backoff logic.
 
 ---
 
-## 📚 Features
+## 🧰 Database Schema & Indexing Strategy
 
-* ✅ Create, Read, Update, Delete subscriptions
-* 📩 Trigger webhooks based on event types
-* 🌐 Subscriptions to all events by passing an empty `event_types` list
-* 🔒 Subscription secrets: Add a secret key to your subscription to verify incoming requests before sending the webhook POST request to the target URL.
-* ⚡ Asynchronous and high-performance (FastAPI + HTTPX)
-* 🔁 Queue-based webhook processing via `asyncio.Queue`
-* 🧪 Comprehensive test suite using `pytest`, `httpx`, and `respx`
-* 🐳 Fully Dockerized setup
+### Subscription Document (MongoDB):
+
+```json
+{
+  "target_url": "https://example.com",
+  "event_types": ["order.update", "user.signup"],
+  "secret": "optional-secret",
+  "created_at": ISODate()
+}
+```
+
+* Index on `event_types` for quick subscription matching.
+* TTL index on delivery logs (if implemented) for auto-cleanup.
 
 ---
 
@@ -48,12 +69,18 @@ This version of the webhook service uses **`asyncio.Queue`** to handle webhook d
 ```bash
 git clone https://github.com/Ns-AnoNymouS/webhook-service.git
 cd webhook-service
-````
+```
 
 ### 2. Build and Start the Server
 
 ```bash
 docker-compose up --build
+```
+
+If on Linux and facing permission issues:
+
+```bash
+sudo docker-compose up --build
 ```
 
 ### 3. Access the API Docs
@@ -62,102 +89,107 @@ Visit: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ---
 
-## 🔌 API Documentation
+## 🔌 API Usage Guide (with curl Examples)
 
 ### ➕ Create Subscription
 
-**POST** `/subscriptions`
-
-```json
-{
-  "target_url": "https://webhook.site/your-endpoint",
-  "event_types": ["order.update"]
-}
+```bash
+curl -X POST http://localhost:8000/subscriptions \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "target_url": "https://webhook.site/your-endpoint",
+        "event_types": ["order.update"]
+      }'
 ```
 
-✅ If `"event_types": []` is provided, the subscription will receive **all events**.
+### 📖 Get All Subscriptions
 
----
+```bash
+curl http://localhost:8000/subscriptions
+```
 
-### 📖 Read All Subscriptions
+### 📖 Get Subscription by ID
 
-**GET** `/subscriptions`
-
-Returns a list of all active subscriptions.
-
----
-
-### 📖 Read One Subscription
-
-**GET** `/subscriptions/{id}`
-
-Returns a specific subscription by its ID.
-
----
+```bash
+curl http://localhost:8000/subscriptions/<subscription_id>
+```
 
 ### 🔁 Update Subscription
 
-**PUT** `/subscriptions/{id}`
-
-```json
-{
-  "target_url": "https://new-url.com",
-  "event_types": []
-}
+```bash
+curl -X PUT http://localhost:8000/subscriptions/<subscription_id> \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "target_url": "https://new-url.com",
+        "event_types": []
+      }'
 ```
-
-Updates the subscription. Empty `event_types` will now capture **all** future events.
-
----
 
 ### ❌ Delete Subscription
 
-**DELETE** `/subscriptions/{id}`
-
-Deletes a subscription by ID.
-
----
-
-### 🚀 Trigger Webhook
-
-**POST** `/ingest/{subscription_id}?event_type=order.update`
-
-```json
-{
-  "order_id": "1234",
-  "status": "shipped"
-}
+```bash
+curl -X DELETE http://localhost:8000/subscriptions/<subscription_id>
 ```
 
-In this updated version, the event_type is now a query parameter in the URL (e.g., ?event_type=order.update), while the payload is provided directly in the body of the request.
+### 🚀 Ingest Webhook
 
-If the `event_type` matches what the subscription expects, a webhook POST request is sent to the `target_url`.
-
-> 🛡️ Verification: If a secret was provided in the subscription, the system will check for the presence of the X-Hub-Signature-256 header in the request. If it’s missing or doesn’t match, the webhook request is rejected. Check the `signature.py` to get the `X-Hub-Signature-256` header for your body.
+```bash
+curl -X POST 'http://localhost:8000/ingest/<subscription_id>?event_type=order.update' \
+  -H 'Content-Type: application/json' \
+  -d '{"order_id": "1234", "status": "shipped"}'
+```
 
 ---
 
-## 🧪 Running Tests
+## 💵 Cost Estimation (Free Tier)
 
-Run tests using the following command:
+Assuming:
+
+* 5000 webhooks/day
+* Avg 1.2 delivery attempts (6000 HTTP POST/day)
+
+### Estimated Monthly Cost on Free Tiers:
+
+* **MongoDB Atlas**: Free up to 512MB (fits easily with TTL logs)
+* **Redis**: Use local Redis or up to 30MB memory with free Redis providers
+* **App Hosting (Render/Heroku/Fly.io)**: Free dynos support 550–750 hours/month (\~23x7)
+* **Total**: 💰 \~\$0/month on generous free tiers
+
+---
+
+## 🔎 Assumptions
+
+* External URLs are valid and reachable.
+* Delivery logs stored in-memory or in a capped Mongo collection.
+* TTL expiry on logs (if stored) cleans up old entries.
+* Redis is used only if retry/dedup logic requires persistence.
+
+---
+
+## 🙏 Credits
+
+* **FastAPI** – [https://fastapi.tiangolo.com](https://fastapi.tiangolo.com)
+* **HTTPX** – [https://www.python-httpx.org](https://www.python-httpx.org)
+* **Respx** – [https://lundberg.github.io/respx/](https://lundberg.github.io/respx/)
+* **Uvicorn** – [https://www.uvicorn.org](https://www.uvicorn.org)
+* **Docker** – [https://www.docker.com](https://www.docker.com)
+* **MongoDB** – [https://www.mongodb.com](https://www.mongodb.com)
+* **Redis** – [https://redis.io](https://redis.io)
+* **GitHub Copilot/OpenAI ChatGPT** – for assistance with code and documentation.
+
+---
+
+## 🌐 Live Demo
+
+[🔗 Deployed App Link (Replace with actual URL)](https://your-live-url.com)
+
+---
+
+## 🧪 Run Tests
 
 ```bash
 PYTHONPATH=./src pytest tests/
 ```
 
-This ensures correct imports when tests rely on `src/` as the module root.
-
----
-
-## 🛠 Tech Stack
-
-* **FastAPI** – Modern Python web framework
-* **Uvicorn** – ASGI web server
-* **HTTPX** – Async HTTP client
-* **Respx** – Mocking HTTP requests
-* **Pytest** – Test framework
-* **Docker** – Containerization
-
----
-
+Use this to run all automated tests against the service logic.
 

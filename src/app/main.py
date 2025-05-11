@@ -23,14 +23,23 @@ logger.addHandler(handler)
 async def lifespan(app: FastAPI):
     app.state.queue = asyncio.Queue(maxsize=1000)  # optional: cap queue size
     start_workers(app.state.queue)
+    print("API documentation is available at: http://localhost:8000/docs")
     yield
     logger.info("Shutting down...")
     stop_workers(app.state.queue)
     await wait_for_background_tasks()
 
-app = FastAPI(lifespan=lifespan)
 
-app.include_router(subscriptions_router, prefix="/subscriptions", tags=["Subscriptions"])
+app = FastAPI(
+    title="Webhook Service",  # Change this to the name you want
+    description="A service for managing webhook subscriptions and delivering events.",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+app.include_router(
+    subscriptions_router, prefix="/subscriptions", tags=["Subscriptions"]
+)
 app.include_router(webhooks_router, prefix="/ingest", tags=["Webhook Ingestion"])
 app.include_router(logs_router, prefix="/status", tags=["Delivery Logs"])
 

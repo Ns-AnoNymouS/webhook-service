@@ -3,12 +3,10 @@ import hashlib
 import json
 
 # Replace these with your actual values
-secret = "string"
+secret = "hi"
 payload = {
-    "event": "user.created",
-    "data": {"id": 123, "name": "John Doe"}
+  "order": "success"
 }
-
 # Encode the payload
 body = json.dumps(payload, separators=(",", ":")).encode() # No whitespace, consistent with server
 signature = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
